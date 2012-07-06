@@ -4,9 +4,9 @@ require File.expand_path('../lib/arel_ruby/version', __FILE__)
 Gem::Specification.new do |gem|
   gem.authors       = ["Akira Matsuda"]
   gem.email         = ["ronnie@dio.jp"]
-  gem.description   = %q{TODO: Write a gem description}
-  gem.summary       = %q{TODO: Write a gem summary}
-  gem.homepage      = ""
+  gem.description   = 'ARel Ruby visitor'
+  gem.summary       = 'ARel Ruby visitor'
+  gem.homepage      = 'https://github.com/amatsuda/arel_ruby'
 
   gem.files         = `git ls-files`.split($\)
   gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
