@@ -4,17 +4,10 @@ require 'date'
 module Arel
   module Visitors
     class Ruby < Arel::Visitors::Visitor
-      attr_accessor :last_column
-
       def initialize
         @connection = Object.new.extend(ActiveRecord::ConnectionAdapters::Quoting)
         @chains = []
         @dummy_column = Struct.new(:type).new
-      end
-
-      def accept object
-        self.last_column = nil
-        super
       end
 
       private
@@ -241,7 +234,6 @@ module Arel
 
 
       def visit_Arel_Attributes_Attribute o
-        self.last_column = o.name
         "o.#{o.name}"
       end
       alias :visit_Arel_Attributes_Integer :visit_Arel_Attributes_Attribute
