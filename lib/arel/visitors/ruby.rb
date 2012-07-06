@@ -6,7 +6,6 @@ module Arel
     class Ruby < Arel::Visitors::Visitor
       def initialize
         @connection = Object.new.extend(ActiveRecord::ConnectionAdapters::Quoting)
-        @chains = []
         @dummy_column = Struct.new(:type).new
       end
 
