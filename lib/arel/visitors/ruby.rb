@@ -41,6 +41,7 @@ module Arel
           ("#{o.orders.map { |x| visit_Arel_Nodes_OrderCore x }.join('.')}" unless o.orders.empty?),
           (visit(o.offset) if o.offset),
           (visit(o.limit) if o.limit),
+          o.cores.map { |x| x.groups.map { |x| visit x}.join '.' }.flatten.join,
         ].compact.delete_if {|e| e.respond_to?(:empty?) && e.empty? }.join '.'
       end
 
@@ -49,7 +50,6 @@ module Arel
 #           ("#{o.projections.map { |x| visit x }.join ', '}" unless o.projections.empty?),
 #           (visit(o.source) if o.source && !o.source.empty?),
           ("#{o.wheres.map { |x| visit x }.join '.' }" unless o.wheres.empty?),
-          ("#{o.groups.map { |x| visit x }.join '.' }" unless o.groups.empty?)
 #           (visit(o.having) if o.having),
         ].compact.join '.'
       end
