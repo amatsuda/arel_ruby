@@ -9,6 +9,7 @@ module Arel
       def initialize
         @connection = Object.new.extend(ActiveRecord::ConnectionAdapters::Quoting)
         @chains = []
+        @dummy_column = Struct.new(:type).new
       end
 
       def accept object
@@ -258,7 +259,7 @@ module Arel
       alias :visit_Fixnum                :literal
 
       def quoted o
-        quote(o, last_column)
+        quote o
       end
 
       alias :visit_ActiveSupport_Multibyte_Chars :quoted
@@ -289,8 +290,8 @@ module Arel
 #         o.map { |x| visit x }.join(', ')
 #       end
 
-      def quote value, column = nil
-        @connection.quote value, column
+      def quote value
+        @connection.quote value, @dummy_column
       end
     end
   end
