@@ -35,28 +35,34 @@ module Arel
 #       end
 
       def visit_Arel_Nodes_SelectStatement o
-        [
-          o.cores.map { |x| visit_Arel_Nodes_SelectCore x }.join,
-          ("#{o.orders.map { |x| visit_Arel_Nodes_OrderCore x }.join('.')}" unless o.orders.empty?),
-          (visit(o.offset) if o.offset),
-          (visit(o.limit) if o.limit),
-          o.cores.map { |x| x.groups.map { |x| visit x}.join '.' }.flatten.join,
-        ].compact.delete_if {|e| e.respond_to?(:empty?) && e.empty? }.join '.'
+        ProcWithSourceCollection.new([
+            o.cores.map { |x| visit_Arel_Nodes_SelectCore x },
+            (o.orders.map { |x| visit_Arel_Nodes_OrderCore x } unless o.orders.empty?),
+            (visit(o.offset) if o.offset),
+            (visit(o.limit) if o.limit),
+            o.cores.map { |x| x.groups.map { |x| visit x} },
+          ])
       end
 
       def visit_Arel_Nodes_SelectCore o
         [
 #           ("#{o.projections.map { |x| visit x }.join ', '}" unless o.projections.empty?),
 #           (visit(o.source) if o.source && !o.source.empty?),
-          ("#{o.wheres.map { |x| visit x }.join '.' }" unless o.wheres.empty?),
+          (o.wheres.map { |x| visit x } unless o.wheres.empty?)
 #           (visit(o.having) if o.having),
-        ].compact.join '.'
-      end
+        ]
+    end
 
       def visit_Arel_Nodes_OrderCore order
-        order.split(',').map do |o|
+        #FIXME order_by('a, b') shouldn't actaully be sort_by(&:a).sort_by(&:b)
+        order.split(',').map(&:strip).map do |o|
           attr, direction = o.split(/\s+/)
-          "sort_by(&:#{visit attr})#{'.reverse' if direction == 'desc'}"
+          v = visit attr
+          ProcWithSource.new("sort_by(&:#{v})#{'.reverse' if direction == 'desc'}") do |collection|
+            col = collection.sort_by {|c| c.send v}
+            col.reverse! if direction == 'desc'
+            col
+          end
         end
       end
 
@@ -115,11 +121,13 @@ module Arel
 #       end
 
       def visit_Arel_Nodes_Offset o
-        "from(#{visit o.expr})"
+        v = visit o.expr
+        ProcWithSource.new("from(#{v})") {|collection| collection.from(v) }
       end
 
       def visit_Arel_Nodes_Limit o
-        "take(#{visit o.expr})"
+        v = visit o.expr
+        ProcWithSource.new("take(#{v})") {|collection| collection.take(v) }
       end
 
 #       def visit_Arel_Nodes_Grouping o
@@ -132,7 +140,8 @@ module Arel
 #       end
 
       def visit_Arel_Nodes_Group o
-        "group_by {|g| g.#{visit o.expr}}"
+        v = visit o.expr
+        ProcWithSource.new("group_by {|g| g.#{v} }") {|collection| collection.group_by {|g| g.send v } }
       end
 
 #       def visit_Arel_Nodes_NamedFunction o
@@ -209,7 +218,7 @@ module Arel
 #       end
 
       def visit_Arel_Nodes_And o
-        o.children.map { |x| "select {|o| #{visit x}}"}.join '.'
+        o.children.map { |x| ProcWithSource.new("select {|o| o.#{visit(x).to_source}}") { |collection| collection.select {|obj| visit(x).call(obj) } } }
       end
 
 #       def visit_Arel_Nodes_Or o
@@ -219,7 +228,8 @@ module Arel
 #       end
 
       def visit_Arel_Nodes_Equality o
-        "#{visit o.left} == #{visit o.right}"
+        l, r =  visit(o.left), visit(o.right)
+        ProcWithSource.new("#{l} == #{r}") { |o| o.send(l) == r }
       end
 
 #       def visit_Arel_Nodes_NotEqual o
@@ -233,7 +243,7 @@ module Arel
 
 
       def visit_Arel_Attributes_Attribute o
-        "o.#{o.name}"
+        o.name
       end
       alias :visit_Arel_Attributes_Integer :visit_Arel_Attributes_Attribute
       alias :visit_Arel_Attributes_Float :visit_Arel_Attributes_Attribute
@@ -250,7 +260,8 @@ module Arel
       alias :visit_Fixnum                :literal
 
       def quoted o
-        quote o
+        # don't actually quote...
+        o
       end
 
       alias :visit_ActiveSupport_Multibyte_Chars :quoted
@@ -277,12 +288,42 @@ module Arel
 #       alias :visit_Arel_Nodes_Multiplication :visit_Arel_Nodes_InfixOperation
 #       alias :visit_Arel_Nodes_Division       :visit_Arel_Nodes_InfixOperation
 
-#       def visit_Array o
-#         o.map { |x| visit x }.join(', ')
-#       end
+      def visit_Array o
+        o.map { |x| visit x }
+      end
 
       def quote value
         @connection.quote value, @dummy_column
+      end
+    end
+
+    class ProcWithSource
+      def initialize(source, &block)
+        @source, @block = source, block
+      end
+
+      def call(*args)
+        @block.call(*args)
+      end
+
+      def to_source
+        @source
+      end
+    end
+
+    class ProcWithSourceCollection
+      def initialize(procs)
+        @procs = procs.flatten.compact
+      end
+
+      def call(collection)
+        @procs.inject(collection) do |result, lmd|
+          lmd.call result
+        end
+      end
+
+      def to_source
+        @procs.map(&:to_source).join('.')
       end
     end
   end
