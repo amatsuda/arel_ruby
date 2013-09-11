@@ -130,8 +130,11 @@ module Arel
         ProcWithSource.new("take(#{v})") {|collection| collection.take(v) }
       end
 
-#       def visit_Arel_Nodes_Grouping o
-#       end
+      def visit_Arel_Nodes_Grouping o
+        # doubtful implementation
+        v = visit o.expr
+        ProcWithSource.new("select {|g| g.#{v.to_source}}") { |collection| collection.select {|obj| v.call(obj) } }
+      end
 
 #       def visit_Arel_Nodes_Ascending o
 #       end
@@ -168,8 +171,10 @@ module Arel
 #       def visit_Arel_Nodes_TableAlias o
 #       end
 
-#       def visit_Arel_Nodes_Between o
-#       end
+      def visit_Arel_Nodes_Between o
+        l, r =  visit(o.left), Range.new(o.right.children.first, o.right.children.last)
+        ProcWithSource.new("#{l}.in? #{r.inspect}") { |o| o.send(l).in?(r) }
+      end
 
 #       def visit_Arel_Nodes_GreaterThanOrEqual o
 #       end
@@ -205,17 +210,31 @@ module Arel
 #       def visit_Arel_Nodes_On o
 #       end
 
-#       def visit_Arel_Nodes_Not o
-#       end
+      def visit_Arel_Nodes_Not o
+        case o.expr
+        when Arel::Nodes::Between
+          c = o.expr
+          l, r =  visit(c.left), Range.new(c.right.children.first, c.right.children.last)
+          # FIXME: 'not_in?' does not actually exist
+          ProcWithSource.new("#{l}.not_in? #{r.inspect}") { |o| !o.send(l).in?(r) }
+        else
+          raise NotImplementedError, 'general Arel::Nodes::Not not implemented'
+        end
+      end
 
 #       def visit_Arel_Table o
 #       end
 
-#       def visit_Arel_Nodes_In o
-#       end
+      def visit_Arel_Nodes_In o
+        l, r =  visit(o.left), visit(o.right)
+        ProcWithSource.new("#{l}.in? #{r.inspect}") { |o| o.send(l).in?(r) }
+      end
 
-#       def visit_Arel_Nodes_NotIn o
-#       end
+      def visit_Arel_Nodes_NotIn o
+        l, r =  visit(o.left), visit(o.right)
+        # FIXME: 'not_in?' does not actually exist
+        ProcWithSource.new("#{l}.not_in? #{r.inspect}") { |o| !o.send(l).in?(r) }
+      end
 
       def visit_Arel_Nodes_And o
         o.children.map { |x| ProcWithSource.new("select {|o| o.#{visit(x).to_source}}") { |collection| collection.select {|obj| visit(x).call(obj) } } }
@@ -229,11 +248,13 @@ module Arel
 
       def visit_Arel_Nodes_Equality o
         l, r =  visit(o.left), visit(o.right)
-        ProcWithSource.new("#{l} == #{r}") { |o| o.send(l) == r }
+        ProcWithSource.new("#{l} == #{r.inspect}") { |o| o.send(l) == r }
       end
 
-#       def visit_Arel_Nodes_NotEqual o
-#       end
+      def visit_Arel_Nodes_NotEqual o
+        l, r =  visit(o.left), visit(o.right)
+        ProcWithSource.new("#{l} != #{r.inspect}") { |o| o.send(l) != r }
+      end
 
 #       def visit_Arel_Nodes_As o
 #       end
